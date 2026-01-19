@@ -3,9 +3,9 @@ from typing import Dict, Any
 from Front import schedule_generator as sg
 
 
-# ==============================================================================
+# =============================================================================
 # CLASSE 3: AFFICHAGE DES RÉSULTATS (SolutionVisualizer)
-# ==============================================================================
+# =============================================================================
 class SolutionVisualizer:
     def __init__(self, solution: Dict[str, Any], data: Dict[str, Any]):
         self.temp = []
