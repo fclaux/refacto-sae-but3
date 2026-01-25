@@ -1,10 +1,10 @@
-from sqlalchemy import create_engine
-from typing import Dict, Any, Tuple
-
 import pandas as pd
-from sqlalchemy import create_engine
+from typing import Dict, Any, Tuple
+# On importe l'engine centralisé depuis ton fichier db_config.py
+from db_config import get_engine
 
 #TODO Faire une refacto des fonctions afin qu'il y ait moins de duplication et que ce soit plus compréhensible et renommage.
+
 def get_end_time(row) -> str:
     if pd.isna(row['end_time']):
         return ""
@@ -31,6 +31,7 @@ def _time_to_slot(time_str: str) -> int:
         return 0
     h, m, _ = map(int, str(time_str).split(':'))
     return (h - 8) * 2 + (m // 30)
+
 def get_availabilityProf_From_Unavailable(df_dispos,creneaux_par_jour):
     disponibilites_profs = {}
     indisponibilites_profs = {}
@@ -197,7 +198,7 @@ def get_availabilitySlot_From_Unavailable(df_dispos,creneaux_par_jour):
     return  disponibilites_slot
 
 def recuperation_disponibilites_slot(creneaux_par_jour, disponibilites_groupes: dict[Any, Any],
-                                      indisponibilites_groupes: dict[Any, Any])-> dict[Any, Any]:
+                                     indisponibilites_groupes: dict[Any, Any])-> dict[Any, Any]:
     liste_jour=['Lundi','Mardi','Mercredi','Jeudi','Vendredi']
     for i in indisponibilites_groupes:
         for day in liste_jour:
@@ -239,102 +240,98 @@ def recuperation_indisponibilites_slot(df_dispos, indisponibilites_groupes: dict
 
 
 class FunctionTest:
-    def __init__(self, db_config: Dict[str, Any]):
-        self.db_config = db_config
-        self.engine = create_engine(
-            f"mysql+mysqlconnector://{db_config['user']}:{db_config['password']}@"
-            f"{db_config['host']}:{db_config['port']}/{db_config['database']}"
-        )
+    def __init__(self):
+        # REFACTO ICI: Utilisation de l'engine centralisé
+        # Plus besoin de passer db_config en paramètre
+        self.engine = get_engine()
+
     def load_and_prepare_data(self):
         week_id=221
         query_dispos = """
-                       SELECT tc.teacher_id, tc.day_of_week, tc.start_time, tc.end_time, tc.priority, tc.week_id
-                       FROM teacher_constraints tc
-                       WHERE tc.active = 1
-                         AND (tc.week_id = %(week_id)s OR tc.week_id IS NULL)
-                         AND (
-                           tc.week_id = %(week_id)s
-                               OR (tc.week_id IS NULL
-                               AND NOT EXISTS (SELECT 1 \
-                                               FROM teacher_constraints tc2 \
-                                               WHERE tc2.teacher_id = tc.teacher_id \
-                                                 AND tc2.day_of_week = tc.day_of_week \
-                                                 AND tc2.week_id = %(week_id)s \
-                                                 AND tc2.active = 1)
+                        SELECT tc.teacher_id, tc.day_of_week, tc.start_time, tc.end_time, tc.priority, tc.week_id
+                        FROM teacher_constraints tc
+                        WHERE tc.active = 1
+                          AND (tc.week_id = %(week_id)s OR tc.week_id IS NULL)
+                          AND (
+                            tc.week_id = %(week_id)s
+                                OR (tc.week_id IS NULL
+                                AND NOT EXISTS (SELECT 1 \
+                                                FROM teacher_constraints tc2 \
+                                                WHERE tc2.teacher_id = tc.teacher_id \
+                                                  AND tc2.day_of_week = tc.day_of_week \
+                                                  AND tc2.week_id = %(week_id)s \
+                                                  AND tc2.active = 1)
                                )
-                           ) \
-                       """
+                            ) \
+                        """
         df_dispos_profs = pd.read_sql(query_dispos, self.engine, params={"week_id": week_id})
         print("test Prof",get_availabilityProf_From_Unavailable(df_dispos_profs,20)) # changer le 20 en une valeur étant le nombre de créneau
 
         query_dispos = """
-                       SELECT rc.room_id, rc.day_of_week, rc.start_time, rc.end_time, rc.priority, rc.week_id
-                       FROM room_constraints rc
-                       WHERE rc.active = 1
-                         AND (rc.week_id = %(week_id)s OR rc.week_id IS NULL)
-                         AND (
-                           rc.week_id = %(week_id)s
-                               OR (rc.week_id IS NULL
-                               AND NOT EXISTS (SELECT 1 \
-                                               FROM room_constraints rc2 \
-                                               WHERE rc2.room_id = rc.room_id \
-                                                 AND rc2.day_of_week = rc.day_of_week \
-                                                 AND rc2.week_id = %(week_id)s \
-                                                 AND rc2.active = 1)
+                        SELECT rc.room_id, rc.day_of_week, rc.start_time, rc.end_time, rc.priority, rc.week_id
+                        FROM room_constraints rc
+                        WHERE rc.active = 1
+                          AND (rc.week_id = %(week_id)s OR rc.week_id IS NULL)
+                          AND (
+                            rc.week_id = %(week_id)s
+                                OR (rc.week_id IS NULL
+                                AND NOT EXISTS (SELECT 1 \
+                                                FROM room_constraints rc2 \
+                                                WHERE rc2.room_id = rc.room_id \
+                                                  AND rc2.day_of_week = rc.day_of_week \
+                                                  AND rc2.week_id = %(week_id)s \
+                                                  AND rc2.active = 1)
                                )
-                           ) \
-                       """
+                            ) \
+                        """
         df_dispos_salles = pd.read_sql(query_dispos, self.engine, params={"week_id": week_id})
         print("Test salles : ",get_availabilityRoom_From_Unavailable(df_dispos_salles,23)) # changer le 20 en une valeur étant le nombre de créneau
 
         query_dispos = """
-                       SELECT gc.group_id, gc.day_of_week, gc.start_time, gc.end_time, gc.priority, gc.week_id
-                       FROM group_constraints gc
-                       WHERE gc.active = 1
-                         AND (gc.week_id = %(week_id)s OR gc.week_id IS NULL)
-                         AND (
-                           gc.week_id = %(week_id)s
-                               OR (gc.week_id IS NULL
-                               AND NOT EXISTS (SELECT 1 \
-                                               FROM group_constraints gc2 \
-                                               WHERE gc2.group_id = gc.group_id \
-                                                 AND gc2.day_of_week = gc.day_of_week \
-                                                 AND gc2.week_id = %(week_id)s \
-                                                 AND gc2.active = 1)
+                        SELECT gc.group_id, gc.day_of_week, gc.start_time, gc.end_time, gc.priority, gc.week_id
+                        FROM group_constraints gc
+                        WHERE gc.active = 1
+                          AND (gc.week_id = %(week_id)s OR gc.week_id IS NULL)
+                          AND (
+                            gc.week_id = %(week_id)s
+                                OR (gc.week_id IS NULL
+                                AND NOT EXISTS (SELECT 1 \
+                                                FROM group_constraints gc2 \
+                                                WHERE gc2.group_id = gc.group_id \
+                                                  AND gc2.day_of_week = gc.day_of_week \
+                                                  AND gc2.week_id = %(week_id)s \
+                                                  AND gc2.active = 1)
                                )
-                           ) \
-                       """
+                            ) \
+                        """
         df_dispos_groupes = pd.read_sql(query_dispos, self.engine, params={"week_id": week_id})
         print("Test Group",get_availabilityGroup_From_Unavailable(df_dispos_groupes,20))
 
         query_dispos = """
-                       SELECT sc.slot_id, sc.day_of_week, sc.start_time, sc.end_time, sc.priority, sc.week_id
-                       FROM slot_constraints sc
-                       WHERE sc.active = 1
-                         AND (sc.week_id = %(week_id)s OR sc.week_id IS NULL)
-                         AND (
-                           sc.week_id = %(week_id)s
-                               OR (sc.week_id IS NULL
-                               AND NOT EXISTS (SELECT 1 \
-                                               FROM slot_constraints sc2 \
-                                               WHERE sc2.slot_id = sc.slot_id \
-                                                 AND sc2.day_of_week = sc.day_of_week \
-                                                 AND sc2.week_id = %(week_id)s \
-                                                 AND sc2.active = 1)
+                        SELECT sc.slot_id, sc.day_of_week, sc.start_time, sc.end_time, sc.priority, sc.week_id
+                        FROM slot_constraints sc
+                        WHERE sc.active = 1
+                          AND (sc.week_id = %(week_id)s OR sc.week_id IS NULL)
+                          AND (
+                            sc.week_id = %(week_id)s
+                                OR (sc.week_id IS NULL
+                                AND NOT EXISTS (SELECT 1 \
+                                                FROM slot_constraints sc2 \
+                                                WHERE sc2.slot_id = sc.slot_id \
+                                                  AND sc2.day_of_week = sc.day_of_week \
+                                                  AND sc2.week_id = %(week_id)s \
+                                                  AND sc2.active = 1)
                                )
-                           ) \
-                       """
+                            ) \
+                        """
         df_dispos_slots = pd.read_sql(query_dispos, self.engine, params={"week_id": week_id})
         print("Test slot : ",get_availabilitySlot_From_Unavailable(df_dispos_slots,20))
 
 
 
 if __name__ == "__main__":
-    DB_CONFIG = {
-        'host': '127.0.0.1', 'database': 'provisional_calendar',
-        'user': 'root', 'password': 'secret', 'port': 3306
-    }
-    data_provider = FunctionTest(DB_CONFIG)
+    # REFACTO ICI: Plus de configuration visible
+    data_provider = FunctionTest()
     data_provider.load_and_prepare_data()
     print(recup_cours("CM_R1.01 Initiation au développement_BUT1_s7000000"))
     print(recup_id_slot_from_str_to_int("développement_BUT1_s7000000"))
