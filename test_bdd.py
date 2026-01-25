@@ -1,17 +1,11 @@
 from ortools.sat.python import cp_model
 import mysql.connector
 
+from connect_database import get_db_connection
 import recup
 from Front import schedule_generator as sg
-def connect_db():
-    return mysql.connector.connect(
-        host='127.0.0.1',
-        database='edt_app',
-        user='edt_user',
-        password='userpassword',
-        port=3306
-    )
-connection = connect_db()
+
+connection = get_db_connection()
 
 cursor = connection.cursor(dictionary=True)
 

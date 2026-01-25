@@ -4,7 +4,9 @@
 API de gestion des contraintes - Exemples d'utilisation
 Démontre toutes les fonctionnalités du gestionnaire de contraintes
 """
-
+import os
+from dotenv import load_dotenv
+from connect_database import get_db_connection
 from constraint_manager import ConstraintManager, ConstraintPriority, ConstraintType
 import mysql.connector
 DEFAULT_YEAR_ID = None
@@ -12,13 +14,7 @@ DEFAULT_WEEK_ID = None
 
 def choose_year():
     """Permet de choisir une année (years.id)"""
-    conn = mysql.connector.connect(
-        host='127.0.0.1',
-        port=33066,
-        database='edt_app',
-        user='edt_user',
-        password='userpassword'
-    )
+    conn = get_db_connection()
     cur = conn.cursor(dictionary=True)
     try:
         cur.execute("SELECT id, name FROM years ORDER BY name DESC")
@@ -43,13 +39,7 @@ def choose_year():
 
 def choose_week(year_id: int | None = None):
     """Permet de choisir une semaine (weeks.id), éventuellement filtrée par année"""
-    conn = mysql.connector.connect(
-        host='127.0.0.1',
-        port=33066,
-        database='edt_app',
-        user='edt_user',
-        password='userpassword'
-    )
+    conn = get_db_connection()
     cur = conn.cursor(dictionary=True)
     try:
         if year_id:
@@ -78,13 +68,7 @@ def choose_week(year_id: int | None = None):
 
 def get_available_entities():
     """Récupère les entités disponibles (enseignants, salles, groupes)"""
-    conn = mysql.connector.connect(
-        host='127.0.0.1',
-        port=33066,
-        database='edt_app',
-        user='edt_user',
-        password='userpassword'
-    )
+    conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     
     try:
@@ -208,9 +192,7 @@ def display_constraints_by_year(year_id: int):
     print("="*60)
 
     # Récupérer les semaines de l'année
-    conn = mysql.connector.connect(
-        host='127.0.0.1', port=33066, database='edt_app', user='edt_user', password='userpassword'
-    )
+    conn = get_db_connection()
     cur = conn.cursor(dictionary=True)
     try:
         cur.execute("SELECT id, week_number, start_date, end_date FROM weeks WHERE year_id = %s ORDER BY week_number", (year_id,))
