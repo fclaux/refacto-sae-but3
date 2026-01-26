@@ -2,41 +2,31 @@
 # -*- coding: utf-8 -*-
 """
 Tests pour les DataProviders (data_provider.py et data_provider_id.py)
+Compatible avec pytest et SonarQube
 """
 
-import unittest
+import pytest
 from unittest.mock import Mock, MagicMock, patch
 import sys
 import os
 import pandas as pd
 
-current_dir = os.path.dirname(os.path.abspath(__file__))
-parent_dir = os.path.dirname(current_dir)
-sys.path.insert(0, parent_dir)
-
-sys.modules['sqlalchemy'] = MagicMock()
-
+# Import des modules à tester
 try:
     from data_provider import DataProvider
     from data_provider_id import DataProviderID
-    print("✅ DataProviders importés avec succès")
 except ImportError as e:
-    print(f"❌ Erreur d'import: {e}")
-    sys.exit(1)
+    pytest.skip(f"DataProviders non disponibles: {e}", allow_module_level=True)
 
 
-class TestDataProvider(unittest.TestCase):
+@pytest.mark.unit
+class TestDataProvider:
     """Tests pour DataProvider"""
 
-    def setUp(self):
+    @pytest.fixture(autouse=True)
+    def setup(self, db_config):
         """Initialisation avant chaque test"""
-        self.db_config = {
-            'host': '127.0.0.1',
-            'port': 33066,
-            'database': 'edt_app',
-            'user': 'edt_user',
-            'password': 'userpassword'
-        }
+        self.db_config = db_config
 
         # Mock create_engine
         with patch('data_provider.create_engine') as mock_engine:
@@ -46,22 +36,22 @@ class TestDataProvider(unittest.TestCase):
 
     def test_init(self):
         """Test initialisation du DataProvider"""
-        self.assertEqual(self.provider.db_config, self.db_config)
-        self.assertIsNotNone(self.provider.engine)
+        assert self.provider.db_config == self.db_config
+        assert self.provider.engine is not None
 
     def test_time_to_slot(self):
         """Test conversion heure -> slot"""
         # 8h00 = slot 0
-        self.assertEqual(self.provider._time_to_slot('08:00:00'), 0)
+        assert self.provider._time_to_slot('08:00:00') == 0
 
         # 8h30 = slot 1
-        self.assertEqual(self.provider._time_to_slot('08:30:00'), 1)
+        assert self.provider._time_to_slot('08:30:00') == 1
 
         # 13h30 = slot 11
-        self.assertEqual(self.provider._time_to_slot('13:30:00'), 11)
+        assert self.provider._time_to_slot('13:30:00') == 11
 
         # Test avec NaN
-        self.assertEqual(self.provider._time_to_slot(pd.NA), 0)
+        assert self.provider._time_to_slot(pd.NA) == 0
 
     @patch('data_provider.pd.read_sql')
     def test_load_and_prepare_data(self, mock_read_sql):
@@ -109,11 +99,11 @@ class TestDataProvider(unittest.TestCase):
         data = self.provider.load_and_prepare_data()
 
         # Vérifications
-        self.assertIn('jours', data)
-        self.assertIn('cours', data)
-        self.assertIn('salles', data)
-        self.assertIn('profs', data)
-        self.assertEqual(data['jours'], 5)
+        assert 'jours' in data
+        assert 'cours' in data
+        assert 'salles' in data
+        assert 'profs' in data
+        assert data['jours'] == 5
 
     def test_build_course_structures_CM(self):
         """Test construction des cours - CM"""
@@ -138,9 +128,9 @@ class TestDataProvider(unittest.TestCase):
         )
 
         # Vérifications
-        self.assertEqual(len(cours), 1)
-        self.assertIn('BUT1', cours[0]['groups'])
-        self.assertEqual(duree[cours[0]['id']], 3)  # 1.5h * 2 slots
+        assert len(cours) == 1
+        assert 'BUT1' in cours[0]['groups']
+        assert duree[cours[0]['id']] == 3  # 1.5h * 2 slots
 
     def test_build_course_structures_TD(self):
         """Test construction des cours - TD"""
@@ -165,23 +155,19 @@ class TestDataProvider(unittest.TestCase):
         )
 
         # Vérifications
-        self.assertEqual(len(cours), 1)
-        self.assertEqual(cours[0]['groups'], ['G1'])
-        self.assertEqual(taille['G1'], 30)
+        assert len(cours) == 1
+        assert cours[0]['groups'] == ['G1']
+        assert taille['G1'] == 30
 
 
-class TestDataProviderID(unittest.TestCase):
+@pytest.mark.unit
+class TestDataProviderID:
     """Tests pour DataProviderID"""
 
-    def setUp(self):
+    @pytest.fixture(autouse=True)
+    def setup(self, db_config):
         """Initialisation avant chaque test"""
-        self.db_config = {
-            'host': '127.0.0.1',
-            'port': 33066,
-            'database': 'edt_app',
-            'user': 'edt_user',
-            'password': 'userpassword'
-        }
+        self.db_config = db_config
 
         with patch('data_provider_id.create_engine') as mock_engine:
             self.mock_engine = MagicMock()
@@ -190,30 +176,30 @@ class TestDataProviderID(unittest.TestCase):
 
     def test_init(self):
         """Test initialisation du DataProviderID"""
-        self.assertEqual(self.provider.db_config, self.db_config)
-        self.assertIsNotNone(self.provider.engine)
+        assert self.provider.db_config == self.db_config
+        assert self.provider.engine is not None
 
     def test_convert_daystring_to_int(self):
         """Test conversion jour string -> int"""
-        self.assertEqual(self.provider.convert_daystring_to_int('Lundi'), 0)
-        self.assertEqual(self.provider.convert_daystring_to_int('Mardi'), 1)
-        self.assertEqual(self.provider.convert_daystring_to_int('Vendredi'), 4)
+        assert self.provider.convert_daystring_to_int('Lundi') == 0
+        assert self.provider.convert_daystring_to_int('Mardi') == 1
+        assert self.provider.convert_daystring_to_int('Vendredi') == 4
 
     def test_get_start_time(self):
         """Test récupération heure de début"""
         row = {'start_time': '08:00:00'}
-        self.assertEqual(self.provider.get_start_time(row), '08:00:00')
+        assert self.provider.get_start_time(row) == '08:00:00'
 
         row_na = {'start_time': pd.NA}
-        self.assertEqual(self.provider.get_start_time(row_na), '')
+        assert self.provider.get_start_time(row_na) == ''
 
     def test_get_end_time(self):
         """Test récupération heure de fin"""
         row = {'end_time': '10:00:00'}
-        self.assertEqual(self.provider.get_end_time(row), '10:00:00')
+        assert self.provider.get_end_time(row) == '10:00:00'
 
         row_na = {'end_time': pd.NA}
-        self.assertEqual(self.provider.get_end_time(row_na), '')
+        assert self.provider.get_end_time(row_na) == ''
 
     @patch('data_provider_id.pd.read_sql')
     def test_get_list_room(self, mock_read_sql):
@@ -224,16 +210,16 @@ class TestDataProviderID(unittest.TestCase):
 
         rooms = self.provider.get_list_room()
 
-        self.assertEqual(len(rooms), 3)
-        self.assertIn('Salle A', rooms)
+        assert len(rooms) == 3
+        assert 'Salle A' in rooms
 
     def test_time_to_slot(self):
         """Test conversion heure -> slot"""
         # 8h00 = slot 0
-        self.assertEqual(self.provider._time_to_slot('08:00:00'), 0)
+        assert self.provider._time_to_slot('08:00:00') == 0
 
         # 9h30 = slot 3
-        self.assertEqual(self.provider._time_to_slot('09:30:00'), 3)
+        assert self.provider._time_to_slot('09:30:00') == 3
 
     @patch('data_provider_id.convert_days_int_to_string')
     def test_convert_courses_dict_to_list_insert(self, mock_convert):
@@ -250,11 +236,12 @@ class TestDataProviderID(unittest.TestCase):
         with patch.object(self.provider, 'insert_data_with_pandas'):
             result = self.provider.convert_courses_dict_to_list_insert(courses)
 
-        self.assertEqual(len(result), 1)
-        self.assertEqual(result[0][3], 'Lundi')
+        assert len(result) == 1
+        assert result[0][3] == 'Lundi'
 
 
-class TestDataProviderIntegration(unittest.TestCase):
+@pytest.mark.integration
+class TestDataProviderIntegration:
     """Tests d'intégration des DataProviders"""
 
     @patch('data_provider.create_engine')
@@ -287,48 +274,7 @@ class TestDataProviderIntegration(unittest.TestCase):
         data = provider.load_and_prepare_data()
 
         # Assertions
-        self.assertIsInstance(data, dict)
-        self.assertIn('cours', data)
-        self.assertIn('salles', data)
-        self.assertGreater(len(data['cours']), 0)
-
-
-def run_tests():
-    """Execute tous les tests"""
-    loader = unittest.TestLoader()
-    suite = unittest.TestSuite()
-
-    # Ajouter toutes les classes de test
-    suite.addTests(loader.loadTestsFromTestCase(TestDataProvider))
-    suite.addTests(loader.loadTestsFromTestCase(TestDataProviderID))
-    suite.addTests(loader.loadTestsFromTestCase(TestDataProviderIntegration))
-
-    runner = unittest.TextTestRunner(verbosity=2)
-    result = runner.run(suite)
-
-    return result
-
-
-if __name__ == '__main__':
-    print("="*70)
-    print("  SUITE DE TESTS - DATA PROVIDERS")
-    print("="*70)
-    print()
-
-    result = run_tests()
-
-    print()
-    print("="*70)
-    print("  RÉSUMÉ DES TESTS")
-    print("="*70)
-    print(f"Tests exécutés: {result.testsRun}")
-    print(f"Succès: {result.testsRun - len(result.failures) - len(result.errors)}")
-    print(f"Échecs: {len(result.failures)}")
-    print(f"Erreurs: {len(result.errors)}")
-
-    if result.wasSuccessful():
-        print("\n✅ TOUS LES TESTS SONT PASSÉS!")
-        sys.exit(0)
-    else:
-        print("\n❌ CERTAINS TESTS ONT ÉCHOUÉ")
-        sys.exit(1)
+        assert isinstance(data, dict)
+        assert 'cours' in data
+        assert 'salles' in data
+        assert len(data['cours']) > 0

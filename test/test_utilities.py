@@ -2,24 +2,19 @@
 # -*- coding: utf-8 -*-
 """
 Tests pour les utilitaires (diagnose.py et function.py)
+Compatible avec pytest et SonarQube
 """
 
-import unittest
+import pytest
 from unittest.mock import Mock, MagicMock, patch
 import sys
 import os
 
-# Ajouter le répertoire parent au path
-current_dir = os.path.dirname(os.path.abspath(__file__))
-parent_dir = os.path.dirname(current_dir)
-sys.path.insert(0, parent_dir)
-
+# Import des modules à tester
 try:
     from diagnose import diagnose_feasibility
-    print("✅ Module diagnose importé avec succès")
     DIAGNOSE_AVAILABLE = True
 except ImportError as e:
-    print(f"⚠️  Module diagnose non trouvé: {e}")
     DIAGNOSE_AVAILABLE = False
 
 try:
@@ -29,52 +24,29 @@ try:
         get_availabilityGroup_From_Unavailable,
         convert_days_int_to_string
     )
-    print("✅ Module function importé avec succès")
     FUNCTION_AVAILABLE = True
 except ImportError as e:
-    print(f"⚠️  Module function non trouvé: {e}")
     FUNCTION_AVAILABLE = False
 
 
-@unittest.skipIf(not DIAGNOSE_AVAILABLE, "Module diagnose non disponible")
-class TestDiagnoseFeasibility(unittest.TestCase):
+@pytest.mark.skipif(not DIAGNOSE_AVAILABLE, reason="Module diagnose non disponible")
+@pytest.mark.unit
+class TestDiagnoseFeasibility:
     """Tests pour la fonction diagnose_feasibility"""
 
-    def setUp(self):
+    @pytest.fixture(autouse=True)
+    def setup(self, valid_schedule_data):
         """Initialisation des données de test"""
-        self.valid_data = {
-            'jours': 5,
-            'creneaux_par_jour': 20,
-            'slots': [(d, s) for d in range(5) for s in range(20)],
-            'nb_slots': 100,
-            'fenetre_midi': [8, 9, 10],  # slots midi bloqués
-            'salles': {'Salle A': 30, 'Salle B': 50, 'Amphi': 100},
-            'cours': [
-                {'id': 'CM_Math_BUT1', 'groups': ['BUT1']},
-                {'id': 'TD_Info_G1', 'groups': ['G1']}
-            ],
-            'duree_cours': {
-                'CM_Math_BUT1': 3,  # 1.5h
-                'TD_Info_G1': 2     # 1h
-            },
-            'taille_groupes': {
-                'BUT1': 60,
-                'G1': 30
-            },
-            'map_groupe_cours': {
-                'BUT1': ['CM_Math_BUT1'],
-                'G1': ['TD_Info_G1']
-            }
-        }
+        self.valid_data = valid_schedule_data
 
     def test_diagnose_valid_schedule(self):
         """Test diagnostic avec un emploi du temps valide"""
         problems = diagnose_feasibility(self.valid_data)
 
         # Vérifier qu'il n'y a pas de problèmes
-        self.assertEqual(len(problems['no_valid_start']), 0)
-        self.assertEqual(len(problems['no_room']), 0)
-        self.assertEqual(len(problems['group_overbooked']), 0)
+        assert len(problems['no_valid_start']) == 0
+        assert len(problems['no_room']) == 0
+        assert len(problems['group_overbooked']) == 0
 
     def test_diagnose_course_too_long(self):
         """Test avec un cours trop long pour un créneau"""
@@ -84,7 +56,7 @@ class TestDiagnoseFeasibility(unittest.TestCase):
         problems = diagnose_feasibility(data)
 
         # Devrait détecter un problème de start invalide
-        self.assertGreater(len(problems['no_valid_start']), 0)
+        assert len(problems['no_valid_start']) > 0
 
     def test_diagnose_room_too_small(self):
         """Test avec des salles trop petites"""
@@ -94,7 +66,7 @@ class TestDiagnoseFeasibility(unittest.TestCase):
         problems = diagnose_feasibility(data)
 
         # Devrait détecter un problème de capacité
-        self.assertGreater(len(problems['no_room']), 0)
+        assert len(problems['no_room']) > 0
 
     def test_diagnose_group_overbooked(self):
         """Test avec un groupe surchargé"""
@@ -109,7 +81,7 @@ class TestDiagnoseFeasibility(unittest.TestCase):
         problems = diagnose_feasibility(data)
 
         # Devrait détecter un groupe surchargé
-        self.assertGreater(len(problems['group_overbooked']), 0)
+        assert len(problems['group_overbooked']) > 0
 
     def test_diagnose_with_midi_constraint(self):
         """Test que les contraintes de midi sont respectées"""
@@ -122,20 +94,21 @@ class TestDiagnoseFeasibility(unittest.TestCase):
         fenetre = set(data['fenetre_midi'])
         usable = [o for o in range(cpd) if o not in fenetre]
 
-        self.assertEqual(len(usable), cpd - len(fenetre))
+        assert len(usable) == cpd - len(fenetre)
 
 
-@unittest.skipIf(not FUNCTION_AVAILABLE, "Module function non disponible")
-class TestFunctionUtilities(unittest.TestCase):
+@pytest.mark.skipif(not FUNCTION_AVAILABLE, reason="Module function non disponible")
+@pytest.mark.unit
+class TestFunctionUtilities:
     """Tests pour les fonctions utilitaires"""
 
     def test_convert_days_int_to_string(self):
         """Test conversion jour int -> string"""
-        self.assertEqual(convert_days_int_to_string(0), 'Lundi')
-        self.assertEqual(convert_days_int_to_string(1), 'Mardi')
-        self.assertEqual(convert_days_int_to_string(2), 'Mercredi')
-        self.assertEqual(convert_days_int_to_string(3), 'Jeudi')
-        self.assertEqual(convert_days_int_to_string(4), 'Vendredi')
+        assert convert_days_int_to_string(0) == 'Lundi'
+        assert convert_days_int_to_string(1) == 'Mardi'
+        assert convert_days_int_to_string(2) == 'Mercredi'
+        assert convert_days_int_to_string(3) == 'Jeudi'
+        assert convert_days_int_to_string(4) == 'Vendredi'
 
     def test_get_availabilityProf_From_Unavailable_empty(self):
         """Test disponibilités prof avec DataFrame vide"""
@@ -147,7 +120,7 @@ class TestFunctionUtilities(unittest.TestCase):
         result = get_availabilityProf_From_Unavailable(df_empty, 20)
 
         # Devrait retourner un dict vide ou avec structure par défaut
-        self.assertIsInstance(result, dict)
+        assert isinstance(result, dict)
 
     def test_get_availabilityRoom_From_Unavailable_empty(self):
         """Test disponibilités salle avec DataFrame vide"""
@@ -158,7 +131,7 @@ class TestFunctionUtilities(unittest.TestCase):
 
         result = get_availabilityRoom_From_Unavailable(df_empty, 20)
 
-        self.assertIsInstance(result, dict)
+        assert isinstance(result, dict)
 
     def test_get_availabilityGroup_From_Unavailable_empty(self):
         """Test disponibilités groupe avec DataFrame vide"""
@@ -169,7 +142,7 @@ class TestFunctionUtilities(unittest.TestCase):
 
         result = get_availabilityGroup_From_Unavailable(df_empty, 20)
 
-        self.assertIsInstance(result, dict)
+        assert isinstance(result, dict)
 
     @patch('pandas.DataFrame')
     def test_availability_with_constraints(self, mock_df):
@@ -189,18 +162,19 @@ class TestFunctionUtilities(unittest.TestCase):
         result = get_availabilityProf_From_Unavailable(df_test, 20)
 
         # Vérifier que la structure est correcte
-        self.assertIsInstance(result, dict)
+        assert isinstance(result, dict)
         if result:  # Si la fonction retourne des résultats
             # Vérifier la présence des teacher_ids
             for teacher_id in df_test['teacher_id'].unique():
                 if teacher_id in result:
-                    self.assertIsInstance(result[teacher_id], dict)
+                    assert isinstance(result[teacher_id], dict)
 
 
-class TestDiagnoseEdgeCases(unittest.TestCase):
+@pytest.mark.unit
+class TestDiagnoseEdgeCases:
     """Tests des cas limites du diagnostic"""
 
-    @unittest.skipIf(not DIAGNOSE_AVAILABLE, "Module diagnose non disponible")
+    @pytest.mark.skipif(not DIAGNOSE_AVAILABLE, reason="Module diagnose non disponible")
     def test_empty_courses(self):
         """Test avec aucun cours"""
         data = {
@@ -219,9 +193,9 @@ class TestDiagnoseEdgeCases(unittest.TestCase):
         problems = diagnose_feasibility(data)
 
         # Pas de problèmes si pas de cours
-        self.assertEqual(len(problems['no_valid_start']), 0)
+        assert len(problems['no_valid_start']) == 0
 
-    @unittest.skipIf(not DIAGNOSE_AVAILABLE, "Module diagnose non disponible")
+    @pytest.mark.skipif(not DIAGNOSE_AVAILABLE, reason="Module diagnose non disponible")
     def test_single_slot_available(self):
         """Test avec un seul slot disponible"""
         data = {
@@ -241,55 +215,4 @@ class TestDiagnoseEdgeCases(unittest.TestCase):
 
         # Devrait avoir des problèmes car très peu de slots
         # (mais au moins un cours devrait pouvoir être placé)
-        self.assertIsInstance(problems, dict)
-
-
-def run_tests():
-    """Execute tous les tests"""
-    loader = unittest.TestLoader()
-    suite = unittest.TestSuite()
-
-    # Ajouter les classes de test disponibles
-    if DIAGNOSE_AVAILABLE:
-        suite.addTests(loader.loadTestsFromTestCase(TestDiagnoseFeasibility))
-        suite.addTests(loader.loadTestsFromTestCase(TestDiagnoseEdgeCases))
-
-    if FUNCTION_AVAILABLE:
-        suite.addTests(loader.loadTestsFromTestCase(TestFunctionUtilities))
-
-    runner = unittest.TextTestRunner(verbosity=2)
-    result = runner.run(suite)
-
-    return result
-
-
-if __name__ == '__main__':
-    print("="*70)
-    print("  SUITE DE TESTS - UTILITAIRES")
-    print("="*70)
-    print()
-
-    if not DIAGNOSE_AVAILABLE:
-        print("⚠️  Module diagnose non disponible - tests ignorés")
-    if not FUNCTION_AVAILABLE:
-        print("⚠️  Module function non disponible - tests ignorés")
-
-    print()
-
-    result = run_tests()
-
-    print()
-    print("="*70)
-    print("  RÉSUMÉ DES TESTS")
-    print("="*70)
-    print(f"Tests exécutés: {result.testsRun}")
-    print(f"Succès: {result.testsRun - len(result.failures) - len(result.errors)}")
-    print(f"Échecs: {len(result.failures)}")
-    print(f"Erreurs: {len(result.errors)}")
-
-    if result.wasSuccessful():
-        print("\n✅ TOUS LES TESTS SONT PASSÉS!")
-        sys.exit(0)
-    else:
-        print("\n❌ CERTAINS TESTS ONT ÉCHOUÉ")
-        sys.exit(1)
+        assert isinstance(problems, dict)
