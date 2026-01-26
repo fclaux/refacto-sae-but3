@@ -9,6 +9,11 @@ omit =
     setup.py
     conftest.py
     .github/*
+    test.py
+    test_bdd.py
+    Front/*
+    Database/*
+    local_generator.py
 
 [report]
 exclude_lines =
