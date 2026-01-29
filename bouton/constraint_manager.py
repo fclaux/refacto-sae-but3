@@ -10,8 +10,6 @@ from datetime import datetime, time
 from typing import List, Dict, Optional, Tuple
 from enum import Enum
 
-from connect_database import get_db_connection
-
 class ConstraintType(Enum):
     """Types de contraintes possibles"""
     TEACHER_UNAVAILABLE = "teacher_unavailable"
@@ -32,8 +30,16 @@ class ConstraintPriority(Enum):
 class ConstraintManager:
     """Gestionnaire de contraintes pour l'emploi du temps"""
     
-    def __init__(self):
+    def __init__(self, host='127.0.0.1', port=33066, database='edt_app', 
+                 user='edt_user', password='userpassword'):
         """Initialise le gestionnaire de contraintes"""
+        self.connection_params = {
+            'host': host,
+            'port': port,
+            'database': database,
+            'user': user,
+            'password': password
+        }
         # Pour éviter de vérifier/migrer en boucle
         self._week_columns_checked = False
         # Vérifie séparément la colonne is_exam (ne pas bloquer les migrations week_id)
@@ -47,7 +53,7 @@ class ConstraintManager:
     
     def _get_connection(self):
         """Crée une connexion à la base de données"""
-        return get_db_connection()
+        return mysql.connector.connect(**self.connection_params)
 
     # ==================== MIGRATIONS SCHEMA ====================
     def _column_exists(self, cursor, table_name: str, column_name: str):
@@ -685,7 +691,13 @@ class ConstraintManager:
 
 def create_constraint_tables():
     """Crée les tables nécessaires pour stocker les contraintes"""
-    conn = get_db_connection()
+    conn = mysql.connector.connect(
+        host='127.0.0.1',
+        port=33066,
+        database='edt_app',
+        user='edt_user',
+        password='userpassword'
+    )
     cursor = conn.cursor()
     
     try:

@@ -337,3 +337,310 @@ class TestGroupeToIndicesEdgeCases:
         """Test avec G8A"""
         result = groupe_to_indices("G8A")
         assert result == [1, "A"]
+
+
+@pytest.mark.unit
+class TestSolutionVisualizerBuildPlanning:
+    """Tests pour _build_planning_from_solution"""
+
+    def test_build_planning_with_valid_solution(self):
+        """Test construction planning avec solution valide"""
+        # Créer des mocks sophistiqués
+        mock_solver = MagicMock()
+        
+        # Variables pour start
+        mock_start_var_0 = MagicMock()
+        mock_start_var_0.Name.return_value = "start_CM_Math_0"
+        
+        # Variables pour salle
+        mock_salle_var_0 = MagicMock()
+        mock_salle_var_0.Name.return_value = "y_salle_CM_Math_0"
+        
+        # Variables pour prof
+        mock_prof_var_0 = MagicMock()
+        mock_prof_var_0.Name.return_value = "z_prof_CM_Math_0"
+        
+        # Configurer le solver.Value pour retourner les bonnes valeurs
+        def value_side_effect(var):
+            name = var.Name()
+            if "start_CM_Math_0" in name:
+                return 1
+            if "y_salle_CM_Math_0" in name:
+                return 1
+            if "z_prof_CM_Math_0" in name:
+                return 1
+            return 0
+        
+        mock_solver.Value = value_side_effect
+        
+        solution = {
+            'solver': mock_solver,
+            'vars': {
+                'start': {('CM_Math', 0): mock_start_var_0},
+                'y_salle': {('CM_Math', 0): mock_salle_var_0},
+                'z_prof': {('CM_Math', 0): mock_prof_var_0}
+            }
+        }
+        
+        data = {
+            'nb_slots': 100,
+            'jours': 5,
+            'creneaux_par_jour': 20,
+            'fenetre_midi': [8, 9],
+            'cours': [{'id': 'CM_Math', 'groups': ['G1']}],
+            'duree_cours': {'CM_Math': 2},
+            'salles': {'Salle A': 30},
+            'profs': ['Prof A']
+        }
+        
+        # Le test ne doit pas planter même si le planning est vide
+        viz = SolutionVisualizer(solution, data)
+        assert isinstance(viz.planning, dict)
+
+    def test_build_planning_empty_solution(self):
+        """Test construction planning avec solution vide"""
+        mock_solver = MagicMock()
+        mock_solver.Value = MagicMock(return_value=0)
+        
+        solution = {
+            'solver': mock_solver,
+            'vars': {'start': {}, 'y_salle': {}, 'z_prof': {}}
+        }
+        
+        data = {
+            'nb_slots': 100,
+            'jours': 5,
+            'creneaux_par_jour': 20,
+            'fenetre_midi': [],
+            'cours': [],
+            'duree_cours': {},
+            'salles': {},
+            'profs': []
+        }
+        
+        viz = SolutionVisualizer(solution, data)
+        assert isinstance(viz.planning, dict)
+
+
+@pytest.mark.unit
+class TestSolutionVisualizerDisplay:
+    """Tests pour la méthode display"""
+
+    def test_display_calls_print_and_generate(self):
+        """Test que display appelle les bonnes méthodes"""
+        mock_solver = MagicMock()
+        mock_solver.Value = MagicMock(return_value=0)
+        
+        solution = {
+            'solver': mock_solver,
+            'vars': {'start': {}, 'y_salle': {}, 'z_prof': {}}
+        }
+        
+        data = {
+            'nb_slots': 100,
+            'jours': 5,
+            'creneaux_par_jour': 20,
+            'fenetre_midi': [],
+            'cours': [],
+            'duree_cours': {},
+            'salles': {},
+            'profs': []
+        }
+        
+        with patch.object(SolutionVisualizer, '_build_planning_from_solution', return_value={}):
+            viz = SolutionVisualizer(solution, data)
+            viz.planning = {}
+            viz.actual_starts = {}
+            
+            mock_data_provider = MagicMock()
+            mock_data_provider.get_list_room.return_value = ["Salle A"]
+            mock_data_provider.convert_courses_dict_to_list_insert = MagicMock()
+            
+            with patch.object(viz, '_print_schedule_to_console') as mock_print:
+                with patch.object(viz, '_generate_graphical_schedule') as mock_gen:
+                    viz.display(mock_data_provider, 1)
+                    mock_print.assert_called_once()
+                    mock_gen.assert_called_once()
+
+
+@pytest.mark.unit
+class TestSolutionVisualizerPrintScheduleWithData:
+    """Tests pour _print_schedule_to_console avec données"""
+
+    def test_print_schedule_with_course(self, capsys):
+        """Test affichage planning avec cours"""
+        mock_solver = MagicMock()
+        mock_solver.Value = MagicMock(return_value=0)
+        
+        solution = {
+            'solver': mock_solver,
+            'vars': {'start': {}, 'y_salle': {}, 'z_prof': {}}
+        }
+        
+        data = {
+            'nb_slots': 100,
+            'jours': 2,
+            'creneaux_par_jour': 10,
+            'fenetre_midi': [4, 5],
+            'cours': [{'id': 'CM_Math', 'groups': ['G1']}],
+            'duree_cours': {'CM_Math': 2},
+            'salles': {'Salle A': 30},
+            'profs': ['Prof A']
+        }
+        
+        with patch.object(SolutionVisualizer, '_build_planning_from_solution', return_value={}):
+            viz = SolutionVisualizer(solution, data)
+            
+            # Simuler un planning avec un cours
+            viz.planning = {
+                0: [('CM_Math', 'Salle A', 'Prof A')],
+                1: [('CM_Math', 'Salle A', 'Prof A')]
+            }
+            viz.actual_starts = {'CM_Math': 0}
+            
+            viz._print_schedule_to_console()
+            
+            captured = capsys.readouterr()
+            assert "Day 1" in captured.out
+            assert "CM_Math" in captured.out
+            assert "Début" in captured.out
+
+    def test_print_schedule_course_continuation(self, capsys):
+        """Test affichage d'un cours en continuation"""
+        mock_solver = MagicMock()
+        mock_solver.Value = MagicMock(return_value=0)
+        
+        solution = {
+            'solver': mock_solver,
+            'vars': {'start': {}, 'y_salle': {}, 'z_prof': {}}
+        }
+        
+        data = {
+            'nb_slots': 50,
+            'jours': 1,
+            'creneaux_par_jour': 10,
+            'fenetre_midi': [],
+            'cours': [{'id': 'TD_Info', 'groups': ['G2']}],
+            'duree_cours': {'TD_Info': 3},
+            'salles': {'Salle B': 50},
+            'profs': ['Prof B']
+        }
+        
+        with patch.object(SolutionVisualizer, '_build_planning_from_solution', return_value={}):
+            viz = SolutionVisualizer(solution, data)
+            
+            viz.planning = {
+                0: [('TD_Info', 'Salle B', 'Prof B')],
+                1: [('TD_Info', 'Salle B', 'Prof B')],
+                2: [('TD_Info', 'Salle B', 'Prof B')]
+            }
+            viz.actual_starts = {'TD_Info': 0}
+            
+            viz._print_schedule_to_console()
+            
+            captured = capsys.readouterr()
+            assert "TD_Info" in captured.out
+
+    def test_print_schedule_empty_slot(self, capsys):
+        """Test affichage d'un créneau vide"""
+        mock_solver = MagicMock()
+        mock_solver.Value = MagicMock(return_value=0)
+        
+        solution = {
+            'solver': mock_solver,
+            'vars': {'start': {}, 'y_salle': {}, 'z_prof': {}}
+        }
+        
+        data = {
+            'nb_slots': 10,
+            'jours': 1,
+            'creneaux_par_jour': 5,
+            'fenetre_midi': [],
+            'cours': [],
+            'duree_cours': {},
+            'salles': {},
+            'profs': []
+        }
+        
+        with patch.object(SolutionVisualizer, '_build_planning_from_solution', return_value={}):
+            viz = SolutionVisualizer(solution, data)
+            viz.planning = {}
+            viz.actual_starts = {}
+            
+            viz._print_schedule_to_console()
+            
+            captured = capsys.readouterr()
+            assert "--" in captured.out  # Créneaux vides
+
+
+@pytest.mark.unit
+class TestSolutionVisualizerGraphical:
+    """Tests pour _generate_graphical_schedule"""
+
+    def test_generate_graphical_schedule_success(self, capsys):
+        """Test génération graphique réussie"""
+        mock_solver = MagicMock()
+        mock_solver.Value = MagicMock(return_value=0)
+        
+        solution = {
+            'solver': mock_solver,
+            'vars': {'start': {}, 'y_salle': {}, 'z_prof': {}}
+        }
+        
+        data = {
+            'nb_slots': 100,
+            'jours': 5,
+            'creneaux_par_jour': 20,
+            'fenetre_midi': [],
+            'cours': [],
+            'duree_cours': {},
+            'salles': {},
+            'profs': []
+        }
+        
+        with patch.object(SolutionVisualizer, '_build_planning_from_solution', return_value={}):
+            viz = SolutionVisualizer(solution, data)
+            viz.temp = []
+            
+            mock_data_provider = MagicMock()
+            mock_data_provider.get_list_room.return_value = ["Salle A", "Salle B"]
+            mock_data_provider.convert_courses_dict_to_list_insert = MagicMock()
+            
+            # Le module schedule_generator est mocké
+            viz._generate_graphical_schedule(mock_data_provider, 1)
+            
+            captured = capsys.readouterr()
+            assert "Generating graphical schedules" in captured.out
+
+    def test_generate_graphical_schedule_exception(self, capsys):
+        """Test génération graphique avec exception"""
+        mock_solver = MagicMock()
+        mock_solver.Value = MagicMock(return_value=0)
+        
+        solution = {
+            'solver': mock_solver,
+            'vars': {'start': {}, 'y_salle': {}, 'z_prof': {}}
+        }
+        
+        data = {
+            'nb_slots': 100,
+            'jours': 5,
+            'creneaux_par_jour': 20,
+            'fenetre_midi': [],
+            'cours': [],
+            'duree_cours': {},
+            'salles': {},
+            'profs': []
+        }
+        
+        with patch.object(SolutionVisualizer, '_build_planning_from_solution', return_value={}):
+            viz = SolutionVisualizer(solution, data)
+            viz.temp = []
+            
+            mock_data_provider = MagicMock()
+            mock_data_provider.get_list_room.side_effect = Exception("Connection error")
+            
+            viz._generate_graphical_schedule(mock_data_provider, 1)
+            
+            captured = capsys.readouterr()
+            assert "ERROR" in captured.out
